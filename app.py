@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
+from forms import UserAddForm, LoginForm, MessageForm, UserUpdateForm
 from models import db, connect_db, User, Message
 
 CURR_USER_KEY = "curr_user"
@@ -19,7 +19,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ECHO"] = False
-app.config["DEBUG_TB_INTERCEPT_REDIRECTS"] = True
+app.config["DEBUG_TB_INTERCEPT_REDIRECTS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "it's a secret")
 toolbar = DebugToolbarExtension(app)
 
@@ -216,6 +216,27 @@ def profile():
     """Update profile for current user."""
 
     # IMPLEMENT THIS
+    curr_user = User.query.get_or_404(g.user.id)
+    form = UserUpdateForm(obj=curr_user)
+    if form.validate_on_submit():
+        if User.authenticate(curr_user.username, form.password.data):
+            curr_user.username = form.username.data
+            curr_user.email = form.email.data
+            if form.new_password.data:
+                new_shit = form.new_password.data
+                curr_user.password = User.gen_pwd(new_shit)
+            curr_user.image_url = form.image_url.data
+            curr_user.header_image_url = form.header_image_url.data
+            curr_user.bio = form.bio.data
+            db.session.add(curr_user)
+            db.session.commit()
+            flash("Profile updated", "success")
+            return redirect("/")
+        else:
+            flash("Current password is incorrect", "danger")
+            return render_template("users/edit.html", form=form)
+    else:
+        return render_template("users/edit.html", form=form)
 
 
 @app.route("/users/delete", methods=["POST"])
@@ -297,7 +318,14 @@ def homepage():
     """
 
     if g.user:
-        messages = Message.query.order_by(Message.timestamp.desc()).limit(100).all()
+        following_ids = [f.id for f in g.user.following]
+        print(following_ids)
+        messages = (
+            Message.query.filter(Message.user_id.in_(following_ids))
+            .order_by(Message.timestamp.desc())
+            .limit(100)
+            .all()
+        )
 
         return render_template("home.html", messages=messages)
 
