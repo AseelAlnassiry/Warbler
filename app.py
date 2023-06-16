@@ -255,6 +255,17 @@ def delete_user():
     return redirect("/signup")
 
 
+@app.route("/users/add_like/<int:post_id>", methods=["POST"])
+def like_post(post_id):
+    message = Message.query.get_or_404(post_id)
+    if message not in g.user.messages:
+        if message not in g.user.likes:
+            g.user.likes.append(message)
+        db.session.add(g.user)
+        db.session.commit()
+    return redirect("/")
+
+
 ##############################################################################
 # Messages routes:
 
@@ -319,7 +330,6 @@ def homepage():
 
     if g.user:
         following_ids = [f.id for f in g.user.following]
-        print(following_ids)
         messages = (
             Message.query.filter(Message.user_id.in_(following_ids))
             .order_by(Message.timestamp.desc())
